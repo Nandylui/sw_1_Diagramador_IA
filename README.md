@@ -26,7 +26,10 @@ npm install
 npm install -D tailwindcss postcss autoprefixer
 npx tailwindcss init -p
 
-# 5. Iniciar el proyecto
+# 5. Iniciar el proyecto - PARA EL BACKEN
+cd server # primero se mueva a la carpeta server
+node index.js # como segundo paso, para iniciar el backend
+
+# 6. Iniciar el proyecto - PARA EL FRONT
 npm start
 
-.
