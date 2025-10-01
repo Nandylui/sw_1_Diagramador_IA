@@ -1,5 +1,6 @@
+// src/hooks/useAI.js
 import { useState, useCallback } from 'react';
-import aiService from '../services/aiService';
+import AIService from '../services/aiService';
 
 export const useAI = () => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -15,54 +16,33 @@ export const useAI = () => {
     setError(null);
 
     try {
-      const diagram = await aiService.generateDiagram(query.trim());
-      
-      if (!diagram || !diagram.classes || diagram.classes.length === 0) {
-        throw new Error('No se pudieron generar clases válidas desde la consulta');
-      }
+      const service = new AIService();
+      const response = await service.generateDiagram(query.trim());
 
-      // Validar y normalizar las clases generadas
-      const normalizedClasses = diagram.classes.map((cls, index) => {
-        // Asegurar que cada clase tenga propiedades válidas
-        const validatedClass = {
-          id: cls.id || Date.now() + index,
-          name: cls.name || `Clase${index + 1}`,
-          x: typeof cls.x === 'number' ? cls.x : 50 + (index % 3) * 250,
-          y: typeof cls.y === 'number' ? cls.y : 50 + Math.floor(index / 3) * 200,
-          width: cls.width || 200,
-          height: cls.height || calculateClassHeight(cls),
-          fields: Array.isArray(cls.fields) ? cls.fields : [],
-          methods: Array.isArray(cls.methods) ? cls.methods : [],
-          isIntermediate: Boolean(cls.isIntermediate)
-        };
+      const { classes, relationships } = await parseAIResponse(response);
 
-        return validatedClass;
-      });
+      const normalizedClasses = classes.map((cls, index) => ({
+        id: cls.id || cls.name || `class-${index}`,
+        name: cls.name || 'Clase',
+        x: cls.x || 50 + index * 30,
+        y: cls.y || 50 + index * 30,
+        width: 200,
+        height: calculateClassHeight(cls),
+        fields: normalizeAttributes(cls),
+        methods: normalizeMethods(cls)
+      }));
 
-      // Validar conexiones
-      const normalizedConnections = Array.isArray(diagram.connections) 
-        ? diagram.connections.filter(conn => {
-            // Solo incluir conexiones válidas
-            return conn.from && conn.to && 
-                   normalizedClasses.some(c => c.id === conn.from) &&
-                   normalizedClasses.some(c => c.id === conn.to);
-          }).map((conn, index) => ({
-            id: conn.id || Date.now() + 1000 + index,
-            from: conn.from,
-            to: conn.to,
-            type: conn.type || 'oneToMany',
-            label: conn.label || '1:*'
-          }))
-        : [];
+      const normalizedConnections = (relationships || []).map((conn, index) => ({
+        id: conn.id || `conn-${index}`,
+        fromId: conn.source || conn.from || conn.fromId || '',
+        toId: conn.target || conn.to || conn.toId || '',
+        type: 'oneToMany',
+        label: conn.label || conn.multiplicity || conn.type || '1:*'
+      }));
 
-      return {
-        classes: normalizedClasses,
-        connections: normalizedConnections
-      };
-
+      return { classes: normalizedClasses, connections: normalizedConnections };
     } catch (err) {
-      const errorMessage = err.message || 'Error desconocido al generar el diagrama';
-      setError(`Error: ${errorMessage}`);
+      setError(`Error: ${err.message || 'Error desconocido al generar el diagrama'}`);
       console.error('Error generating diagram:', err);
       return null;
     } finally {
@@ -70,25 +50,107 @@ export const useAI = () => {
     }
   }, []);
 
-  const clearError = useCallback(() => {
-    setError(null);
-  }, []);
+  const clearError = useCallback(() => setError(null), []);
 
-  // Calcular altura de clase basada en contenido
   const calculateClassHeight = (cls) => {
-    const baseHeight = 60; // Header
+    const baseHeight = 60;
     const itemHeight = 25;
     const fieldsHeight = (cls.fields?.length || 0) * itemHeight;
     const methodsHeight = (cls.methods?.length || 0) * itemHeight;
-    const separatorHeight = (cls.fields?.length > 0 && cls.methods?.length > 0) ? 2 : 0;
-    
+    const separatorHeight = (fieldsHeight > 0 && methodsHeight > 0) ? 2 : 0;
     return Math.max(120, baseHeight + fieldsHeight + methodsHeight + separatorHeight);
   };
 
-  return {
-    generateDiagram,
-    isGenerating,
-    error,
-    clearError
-  };
+  return { generateDiagram, isGenerating, error, clearError };
 };
+
+// 🔧 parse AI response
+async function parseAIResponse(response) {
+  if (!response) throw new Error("Respuesta vacía de la IA");
+
+  if (response.classes || response.relationships || response.relaciones || response.types || response.classDiagram) {
+    return normalizeAIFormat(response);
+  }
+
+  if (response.choices?.[0]?.message?.content) {
+    let content = response.choices[0].message.content.trim();
+    content = content.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+    try {
+      const parsed = JSON.parse(content);
+      return normalizeAIFormat(parsed);
+    } catch (e) {
+      console.error("❌ No se pudo parsear el JSON de OpenAI:", content);
+      throw new Error("La IA devolvió un formato ilegible");
+    }
+  }
+
+  throw new Error("Formato desconocido de la IA");
+}
+
+// 🔧 Normaliza cualquier formato
+function normalizeAIFormat(data) {
+  let classes = [];
+  let relationships = [];
+
+  // Caso: respuesta con package
+  if (data.package) {
+    classes = data.package.classes || [];
+    relationships = data.package.associations || [];
+  }
+
+  // Caso: respuesta con types
+  if (data.types) {
+    classes = data.types.map(t => ({
+      name: t.name,
+      attributes: t.attributes || [],
+      methods: t.methods || []
+    }));
+  }
+
+  // Caso: respuesta con classDiagram
+  if (data.classDiagram) {
+    classes = data.classDiagram.classes || [];
+    relationships = data.classDiagram.relationships || [];
+  }
+
+  // Caso: respuesta con clases y relaciones
+  if (data.classes) classes = data.classes;
+  if (data.relationships) relationships = data.relationships;
+  if (data.relaciones) relationships = data.relaciones;
+
+  if (!classes?.length) {
+    throw new Error("No se encontraron clases válidas");
+  }
+
+  return { classes, relationships };
+}
+
+// 🔧 Normalizar atributos como objetos {name, type}
+function normalizeAttributes(cls) {
+  if (!cls) return [];
+  const attrs = cls.attributes || cls.fields || [];
+  return attrs.map(a => {
+    if (typeof a === 'string') {
+      const [name, type] = a.split(':').map(s => s.trim());
+      return { name: name || '', type: type || '', visibility: '+' };
+    }
+    return { name: a.name || '', type: a.type || '', visibility: a.visibility || '+' };
+  });
+}
+
+// 🔧 Normalizar métodos como objetos {name, type}
+function normalizeMethods(cls) {
+  if (!cls) return [];
+  const methods = cls.methods || [];
+  return methods.map(m => {
+    if (!m) return { name: '', type: '', visibility: '+' };
+    if (typeof m === 'string') return { name: m, type: 'void', visibility: '+' };
+    return {
+      name: m.name || '',
+      type: m.type || m.returnType || 'void',
+      visibility: m.visibility || '+',
+      parameters: m.parameters || []
+    };
+  });
+}

@@ -66,13 +66,13 @@ const Toolbar = ({
       </button>
 
       <div className="flex gap-2">
-        <label className="p-2 bg-green-500 text-white rounded cursor-pointer" title="Importar">
+        {/*<label className="p-2 bg-green-500 text-white rounded cursor-pointer" title="Importar">
           <Upload size={20} />
           <input type="file" accept=".json" onChange={onImportDiagram} className="hidden" />
         </label>
         <button onClick={onExportDiagram} className="p-2 bg-blue-500 text-white rounded" title="Exportar JSON">
           <Save size={20} />
-        </button>
+        </button>*/}
         <button onClick={onExportCode} className="p-2 bg-orange-500 text-white rounded" title="Exportar Código">
           <FileText size={20} />
         </button>

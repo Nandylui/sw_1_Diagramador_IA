@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 const PropertyPanel = ({
   selectedClass,
@@ -10,12 +10,7 @@ const PropertyPanel = ({
   onRemoveMethod,
   onRemoveClass
 }) => {
-  // Hooks siempre al inicio
-  const [fieldToDelete, setFieldToDelete] = useState('');
-  const [methodToDelete, setMethodToDelete] = useState('');
-
   if (!selectedClass) return null;
-
   const cls = classes.find(c => c.id === selectedClass);
   if (!cls) return null;
 
@@ -33,14 +28,12 @@ const PropertyPanel = ({
         />
       </div>
 
-      <div className="mb-4">
-        <button
-          onClick={() => onRemoveClass(cls.id)}
-          className="w-full p-2 bg-red-600 text-white rounded hover:bg-red-800"
-        >
-          Eliminar Clase
-        </button>
-      </div>
+      <button
+        onClick={() => onRemoveClass(cls.id)}
+        className="w-full p-2 bg-red-600 text-white rounded hover:bg-red-800 mb-4"
+      >
+        Eliminar Clase
+      </button>
 
       {/* Campos */}
       <div className="mb-4">
@@ -54,79 +47,25 @@ const PropertyPanel = ({
           </button>
         </div>
 
-        {cls.fields && cls.fields.length > 0 && (
-          <>
-            {cls.fields.map((field, index) => (
-              <div key={index} className="flex gap-2 mb-2 items-center">
-                <select
-                  value={field.visibility}
-                  onChange={(e) => {
-                    const newFields = [...cls.fields];
-                    newFields[index].visibility = e.target.value;
-                    onUpdateClass(cls.id, { fields: newFields });
-                  }}
-                  className="w-12 p-1 border rounded text-sm"
-                >
-                  <option value="+">+</option>
-                  <option value="-">-</option>
-                  <option value="#">#</option>
-                </select>
-
-                <input
-                  type="text"
-                  value={field.name}
-                  onChange={(e) => {
-                    const newFields = [...cls.fields];
-                    newFields[index].name = e.target.value;
-                    onUpdateClass(cls.id, { fields: newFields });
-                  }}
-                  className="flex-1 p-1 border rounded text-sm"
-                  placeholder="Nombre"
-                />
-
-                <input
-                  type="text"
-                  value={field.type}
-                  onChange={(e) => {
-                    const newFields = [...cls.fields];
-                    newFields[index].type = e.target.value;
-                    onUpdateClass(cls.id, { fields: newFields });
-                  }}
-                  className="w-20 p-1 border rounded text-sm"
-                  placeholder="Tipo"
-                />
-              </div>
-            ))}
-
-            <div className="flex gap-2 mt-2">
-              <select
-                value={fieldToDelete}
-                onChange={(e) => setFieldToDelete(e.target.value)}
-                className="flex-1 p-1 border rounded text-sm"
-              >
-                <option value="">Seleccionar campo...</option>
-                {cls.fields.map((f, idx) => (
-                  <option key={idx} value={idx}>{f.name}</option>
-                ))}
-              </select>
+        {cls.fields?.length > 0 ? (
+          cls.fields.map((field, index) => (
+            <div key={index} className="flex gap-2 mb-2 items-center">
+              <span>{field.visibility} {field.name}: {field.type}</span>
               <button
-                onClick={() => {
-                  if (fieldToDelete !== '') {
-                    onRemoveField(cls.id, parseInt(fieldToDelete));
-                    setFieldToDelete('');
-                  }
-                }}
-                className="p-1 bg-red-600 text-white rounded hover:bg-red-800 text-sm"
+                onClick={() => onRemoveField(cls.id, index)}
+                className="p-1 bg-red-500 text-white rounded text-xs hover:bg-red-700"
               >
-                Eliminar
+                X
               </button>
             </div>
-          </>
+          ))
+        ) : (
+          <p className="text-gray-500 text-sm">No hay campos</p>
         )}
       </div>
 
       {/* Métodos */}
-      <div className="mb-4">
+      <div>
         <div className="flex justify-between items-center mb-2">
           <h4 className="font-medium">Métodos:</h4>
           <button
@@ -137,74 +76,20 @@ const PropertyPanel = ({
           </button>
         </div>
 
-        {cls.methods && cls.methods.length > 0 && (
-          <>
-            {cls.methods.map((method, index) => (
-              <div key={index} className="flex gap-2 mb-2 items-center">
-                <select
-                  value={method.visibility}
-                  onChange={(e) => {
-                    const newMethods = [...cls.methods];
-                    newMethods[index].visibility = e.target.value;
-                    onUpdateClass(cls.id, { methods: newMethods });
-                  }}
-                  className="w-12 p-1 border rounded text-sm"
-                >
-                  <option value="+">+</option>
-                  <option value="-">-</option>
-                  <option value="#">#</option>
-                </select>
-
-                <input
-                  type="text"
-                  value={method.name}
-                  onChange={(e) => {
-                    const newMethods = [...cls.methods];
-                    newMethods[index].name = e.target.value;
-                    onUpdateClass(cls.id, { methods: newMethods });
-                  }}
-                  className="flex-1 p-1 border rounded text-sm"
-                  placeholder="Método()"
-                />
-
-                <input
-                  type="text"
-                  value={method.type}
-                  onChange={(e) => {
-                    const newMethods = [...cls.methods];
-                    newMethods[index].type = e.target.value;
-                    onUpdateClass(cls.id, { methods: newMethods });
-                  }}
-                  className="w-20 p-1 border rounded text-sm"
-                  placeholder="Tipo"
-                />
-              </div>
-            ))}
-
-            <div className="flex gap-2 mt-2">
-              <select
-                value={methodToDelete}
-                onChange={(e) => setMethodToDelete(e.target.value)}
-                className="flex-1 p-1 border rounded text-sm"
-              >
-                <option value="">Seleccionar método...</option>
-                {cls.methods.map((m, idx) => (
-                  <option key={idx} value={idx}>{m.name}</option>
-                ))}
-              </select>
+        {cls.methods?.length > 0 ? (
+          cls.methods.map((method, index) => (
+            <div key={index} className="flex gap-2 mb-2 items-center">
+              <span>{method.visibility} {method.name}: {method.type}</span>
               <button
-                onClick={() => {
-                  if (methodToDelete !== '') {
-                    onRemoveMethod(cls.id, parseInt(methodToDelete));
-                    setMethodToDelete('');
-                  }
-                }}
-                className="p-1 bg-red-600 text-white rounded hover:bg-red-800 text-sm"
+                onClick={() => onRemoveMethod(cls.id, index)}
+                className="p-1 bg-red-500 text-white rounded text-xs hover:bg-red-700"
               >
-                Eliminar
+                X
               </button>
             </div>
-          </>
+          ))
+        ) : (
+          <p className="text-gray-500 text-sm">No hay métodos</p>
         )}
       </div>
     </div>

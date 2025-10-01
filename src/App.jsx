@@ -1,10 +1,12 @@
+// src/App.jsx
 import React, { useState, useRef } from "react";
 import Toolbar from "./components/Toolbar";
 import Canvas from "./components/Canvas";
-import PropertyPanel from "./components/PropertyPanel";
+import PropertyPanel from "./components/PropertyPanel/PropertyPanel";
 import AIPanel from "./components/AIPanel";
-import { useAI } from "./components/ConnectionLine/ConnectionLine";
+import { useAI } from "./hooks/useAI";
 import { RELATIONSHIP_TYPES } from "./utils/constants";
+import { exportSpringBoot } from "./utils/exportSpringBoot"; // ✅ Importamos la función corregida
 
 const App = () => {
   const canvasRef = useRef(null);
@@ -19,24 +21,39 @@ const App = () => {
 
   const { generateDiagram, isGenerating } = useAI();
 
+  // Función IA
   const generateDiagramWithAI = async () => {
     const result = await generateDiagram(aiQuery);
     if (result) {
-      setClasses(result.classes);
-      setConnections(result.connections);
+      setClasses([]);
+      setConnections([]);
+      const normalizedClasses = result.classes.map((cls, idx) => ({
+        ...cls,
+        id: cls.id || cls.name || `class-${idx}`,
+        methods: (cls.methods || []).map(m => ({
+          ...m,
+          type: m.type || m.returnType || 'void'
+        }))
+      }));
+      setTimeout(() => {
+        setClasses(normalizedClasses);
+        setConnections(result.connections);
+      }, 50);
     }
   };
 
-  // Mover clase
-  const onClassMove = (id, pos) => {
-    setClasses(prev =>
-      prev.map(cls =>
-        cls.id === id ? { ...cls, x: pos.x, y: pos.y } : cls
-      )
-    );
+  // ✅ Función para exportar código Spring Boot
+  const onExportCode = () => {
+    if (!classes || classes.length === 0) {
+      alert('No hay clases para exportar');
+      return;
+    }
+    exportSpringBoot(classes);
   };
 
-  // Agregar nueva clase
+  // Funciones para mover/agregar/quitar clases, campos y métodos
+  const onClassMove = (id, pos) => setClasses(prev => prev.map(cls => cls.id === id ? { ...cls, x: pos.x, y: pos.y } : cls));
+  
   const addNewClass = () => {
     const newClass = {
       id: Date.now(),
@@ -52,17 +69,14 @@ const App = () => {
     setClasses(prev => [...prev, newClass]);
   };
 
-  // Eliminar clase
   const removeClass = (id) => {
     setClasses(prev => prev.filter(cls => cls.id !== id));
     setConnections(prev => prev.filter(conn => conn.fromId !== id && conn.toId !== id));
     if (selectedClass === id) setSelectedClass(null);
   };
 
-  // Crear conexión
   const createConnection = (fromId, toId, type) => {
     if (fromId === toId) return;
-
     if (type === "manyToMany") {
       const interClass = {
         id: Date.now(),
@@ -86,54 +100,39 @@ const App = () => {
     }
   };
 
-  // Editar clase
-  const updateClass = (id, updatedData) => {
-    setClasses(prev =>
-      prev.map(cls => (cls.id === id ? { ...cls, ...updatedData } : cls))
-    );
-  };
+  const updateClass = (id, updatedData) => setClasses(prev => prev.map(cls => cls.id === id ? { ...cls, ...updatedData } : cls));
 
-  // Campos
-  const addField = (id) => {
-    setClasses(prev =>
-      prev.map(cls =>
-        cls.id === id
-          ? { ...cls, fields: [...(cls.fields || []), { visibility: '+', name: 'nuevoAtributo', type: 'String' }] }
-          : cls
-      )
-    );
-  };
+  const addField = (id) => setClasses(prev =>
+    prev.map(cls =>
+      cls.id === id
+        ? { ...cls, fields: [...(cls.fields || []), { visibility: '+', name: 'nuevoAtributo', type: 'String' }] }
+        : cls
+    )
+  );
 
-  const removeField = (id, index) => {
-    setClasses(prev =>
-      prev.map(cls =>
-        cls.id === id
-          ? { ...cls, fields: cls.fields.filter((_, i) => i !== index) }
-          : cls
-      )
-    );
-  };
+  const removeField = (id, index) => setClasses(prev =>
+    prev.map(cls =>
+      cls.id === id
+        ? { ...cls, fields: cls.fields.filter((_, i) => i !== index) }
+        : cls
+    )
+  );
 
-  // Métodos
-  const addMethod = (id) => {
-    setClasses(prev =>
-      prev.map(cls =>
-        cls.id === id
-          ? { ...cls, methods: [...(cls.methods || []), { visibility: '+', name: 'nuevoMetodo()', type: 'void' }] }
-          : cls
-      )
-    );
-  };
+  const addMethod = (id) => setClasses(prev =>
+    prev.map(cls =>
+      cls.id === id
+        ? { ...cls, methods: [...(cls.methods || []), { visibility: '+', name: 'nuevoMetodo', type: 'void', parameters: [] }] }
+        : cls
+    )
+  );
 
-  const removeMethod = (id, index) => {
-    setClasses(prev =>
-      prev.map(cls =>
-        cls.id === id
-          ? { ...cls, methods: cls.methods.filter((_, i) => i !== index) }
-          : cls
-      )
-    );
-  };
+  const removeMethod = (id, index) => setClasses(prev =>
+    prev.map(cls =>
+      cls.id === id
+        ? { ...cls, methods: cls.methods.filter((_, i) => i !== index) }
+        : cls
+    )
+  );
 
   return (
     <div className="w-full h-screen bg-gray-100 flex flex-col">
@@ -154,7 +153,7 @@ const App = () => {
         relationshipTypes={RELATIONSHIP_TYPES}
         onShowAIPanel={() => setShowAIPanel(true)}
         onExportDiagram={() => {}}
-        onExportCode={() => {}}
+        onExportCode={onExportCode} // ✅ Función conectada al botón
         onImportDiagram={() => {}}
         onAddClass={addNewClass}
       />
@@ -182,7 +181,7 @@ const App = () => {
           onAddMethod={addMethod}
           onRemoveField={removeField}
           onRemoveMethod={removeMethod}
-          onRemoveClass={removeClass} // <-- agregado
+          onRemoveClass={removeClass}
         />
       </div>
     </div>
