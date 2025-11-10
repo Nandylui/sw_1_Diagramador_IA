@@ -11,6 +11,18 @@ Una aplicación web completa para crear diagramas UML de clases con funcionalida
 - **Historial completo** (Undo/Redo)
 - **Interfaz intuitiva** con panel de propiedades
 
+## Backend(server/ )
+## --> Lenguaje: JavaScript(Node.js)
+## --> Framework: Express.js
+## --> Tecnologia: Express "maneja la ruta para comunicarse con la IA"
+
+
+## Frontend(src/ )
+## --> Lenguaje: JavaScript(React)"encargado del editor visual de diagramas UML"
+## --> Framework: React
+
+
+
 ## Instalación
 
 ```bash
