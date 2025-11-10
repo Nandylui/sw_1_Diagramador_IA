@@ -8,6 +8,9 @@ import { useAI } from "./hooks/useAI";
 import { RELATIONSHIP_TYPES } from "./utils/constants";
 import { exportSpringBoot } from "./utils/exportSpringBoot";
 
+// ✅ Importamos el provider del contexto
+import { DiagramProvider } from "./context/DiagramContext";
+
 const App = () => {
   const canvasRef = useRef(null);
   const [classes, setClasses] = useState([]);
@@ -21,7 +24,6 @@ const App = () => {
 
   const { generateDiagram, isGenerating } = useAI();
 
-  // ✅ Generar con IA (mantiene igual)
   const generateDiagramWithAI = async () => {
     const contextPrompt = classes.length > 0 
       ? `CONTEXTO ACTUAL DEL DIAGRAMA:
@@ -175,13 +177,11 @@ IMPORTANTE:
     if (selectedClass === id) setSelectedClass(null);
   };
 
-  // ✅ FUNCIÓN ACTUALIZADA: crea correctamente las conexiones con su tipo UML
   const createConnection = (fromId, toId, type) => {
     if (fromId === toId) return;
 
     console.log('🔗 Creando conexión:', { fromId, toId, type });
 
-    // 🔍 Validar tipo real de relación (por si llega undefined)
     const connectionType = type || relationshipType || "association";
 
     if (connectionType === "manyToMany") {
@@ -214,7 +214,7 @@ IMPORTANTE:
         id: Date.now(),
         fromId,
         toId,
-        type: connectionType, // 👈 tipo guardado correctamente
+        type: connectionType,
         label: getDefaultLabel(connectionType),
       };
 
@@ -296,57 +296,60 @@ IMPORTANTE:
     );
   };
 
+  // ✅ Envolvemos toda la app en DiagramProvider
   return (
-    <div className="w-full h-screen bg-gray-100 flex flex-col">
-      <AIPanel
-        isOpen={showAIPanel}
-        onClose={() => setShowAIPanel(false)}
-        query={aiQuery}
-        setQuery={setAiQuery}
-        onGenerate={generateDiagramWithAI}
-        isGenerating={isGenerating}
-      />
+    <DiagramProvider>
+      <div className="w-full h-screen bg-gray-100 flex flex-col">
+        <AIPanel
+          isOpen={showAIPanel}
+          onClose={() => setShowAIPanel(false)}
+          query={aiQuery}
+          setQuery={setAiQuery}
+          onGenerate={generateDiagramWithAI}
+          isGenerating={isGenerating}
+        />
 
-      <Toolbar
-        selectedTool={selectedTool}
-        setSelectedTool={setSelectedTool}
-        relationshipType={relationshipType}
-        setRelationshipType={setRelationshipType}
-        relationshipTypes={RELATIONSHIP_TYPES}
-        onShowAIPanel={() => setShowAIPanel(true)}
-        onExportDiagram={() => {}}
-        onExportCode={onExportCode}
-        onImportDiagram={() => {}}
-        onAddClass={addNewClass}
-      />
-
-      <div className="flex flex-1 overflow-hidden">
-        <Canvas
-          canvasRef={canvasRef}
-          classes={classes}
-          connections={connections}
-          connectingFrom={connectingFrom}
+        <Toolbar
           selectedTool={selectedTool}
+          setSelectedTool={setSelectedTool}
           relationshipType={relationshipType}
-          onCanvasClick={() => setConnectingFrom(null)}
-          onClassClick={setConnectingFrom}
-          onClassMove={onClassMove}
-          onCreateConnection={createConnection}
-          onSelectClass={setSelectedClass}
+          setRelationshipType={setRelationshipType}
+          relationshipTypes={RELATIONSHIP_TYPES}
+          onShowAIPanel={() => setShowAIPanel(true)}
+          onExportDiagram={() => {}}
+          onExportCode={onExportCode}
+          onImportDiagram={() => {}}
+          onAddClass={addNewClass}
         />
 
-        <PropertyPanel
-          selectedClass={selectedClass}
-          classes={classes}
-          onUpdateClass={updateClass}
-          onAddField={addField}
-          onAddMethod={addMethod}
-          onRemoveField={removeField}
-          onRemoveMethod={removeMethod}
-          onRemoveClass={removeClass}
-        />
+        <div className="flex flex-1 overflow-hidden">
+          <Canvas
+            canvasRef={canvasRef}
+            classes={classes}
+            connections={connections}
+            connectingFrom={connectingFrom}
+            selectedTool={selectedTool}
+            relationshipType={relationshipType}
+            onCanvasClick={() => setConnectingFrom(null)}
+            onClassClick={setConnectingFrom}
+            onClassMove={onClassMove}
+            onCreateConnection={createConnection}
+            onSelectClass={setSelectedClass}
+          />
+
+          <PropertyPanel
+            selectedClass={selectedClass}
+            classes={classes}
+            onUpdateClass={updateClass}
+            onAddField={addField}
+            onAddMethod={addMethod}
+            onRemoveField={removeField}
+            onRemoveMethod={removeMethod}
+            onRemoveClass={removeClass}
+          />
+        </div>
       </div>
-    </div>
+    </DiagramProvider>
   );
 };
 

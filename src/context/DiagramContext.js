@@ -1,3 +1,4 @@
+// src/context/DiagramContext.js
 import React, { createContext, useContext, useReducer } from 'react';
 
 // Estado inicial
@@ -30,6 +31,34 @@ const ACTIONS = {
   UNDO: 'UNDO',
   REDO: 'REDO',
   SAVE_STATE: 'SAVE_STATE'
+};
+
+// Función para normalizar datos recibidos y evitar errores en el Canvas
+const normalizeDiagramData = (data) => {
+  if (!data) return { classes: [], connections: [] };
+
+  // Normalizar clases, asignando ID si no tiene, y valores por defecto
+  const classes = (data.classes || []).map((cls, index) => ({
+    id: cls.id || `cls_${index}_${cls.name || "Clase"}`,
+    name: cls.name || "Clase",
+    x: cls.x || 100 + index * 50,
+    y: cls.y || 100 + index * 30,
+    fields: cls.fields || [],
+    methods: cls.methods || [],
+    stereotype: cls.stereotype || null,
+    isAbstract: cls.isAbstract || false,
+    isInterface: cls.isInterface || false
+  }));
+
+  // Normalizar conexiones, asignando id y adaptando campos
+  const connections = (data.connections || []).map((conn, i) => ({
+    id: conn.id || `conn_${i}`,
+    from: conn.from || conn.fromId || "",
+    to: conn.to || conn.toId || "",
+    type: conn.type || "association"
+  }));
+
+  return { classes, connections };
 };
 
 // Reducer
@@ -202,7 +231,13 @@ export const DiagramProvider = ({ children }) => {
     setSelectedClass: (id) => dispatch({ type: ACTIONS.SET_SELECTED_CLASS, payload: id }),
     setSelectedConnection: (id) => dispatch({ type: ACTIONS.SET_SELECTED_CONNECTION, payload: id }),
     setSelectedTool: (tool) => dispatch({ type: ACTIONS.SET_SELECTED_TOOL, payload: tool }),
-    loadDiagram: (diagram) => dispatch({ type: ACTIONS.LOAD_DIAGRAM, payload: diagram }),
+
+    // Aquí normalizamos antes de cargar el diagrama
+    loadDiagram: (diagram) => {
+      const normalized = normalizeDiagramData(diagram);
+      dispatch({ type: ACTIONS.LOAD_DIAGRAM, payload: normalized });
+    },
+
     clearDiagram: () => dispatch({ type: ACTIONS.CLEAR_DIAGRAM }),
     undo: () => dispatch({ type: ACTIONS.UNDO }),
     redo: () => dispatch({ type: ACTIONS.REDO }),

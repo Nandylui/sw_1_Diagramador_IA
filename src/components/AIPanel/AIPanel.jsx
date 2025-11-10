@@ -1,18 +1,40 @@
 // src/components/AIPanel/AIPanel.jsx
-import React, { useState } from 'react';
-import { Sparkles, RefreshCw, Info } from 'lucide-react';
+import React, { useState } from "react";
+import { Sparkles, RefreshCw, Info } from "lucide-react";
+import { analyzeDiagramImage } from "../../services/aiImageService";
+import { useDiagramContext } from "../../context/DiagramContext";
 
-const AIPanel = ({ 
-  isOpen, 
-  onClose, 
-  query, 
-  setQuery, 
-  onGenerate, 
-  isGenerating 
+const AIPanel = ({
+  isOpen,
+  onClose,
+  query,
+  setQuery,
+  onGenerate,
+  isGenerating,
 }) => {
   const [showExamples, setShowExamples] = useState(false);
+  const [file, setFile] = useState(null); // ✅ para la imagen
+  const [isLoadingImage, setLoadingImage] = useState(false); // ✅ estado de carga de imagen
+  const { loadDiagram } = useDiagramContext(); // ✅ cargar diagrama al canvas
 
   if (!isOpen) return null;
+
+  // ✅ Nueva función para analizar imagen UML
+  const handleAnalyzeImage = async () => {
+    if (!file) return alert("Selecciona una imagen primero");
+    try {
+      setLoadingImage(true);
+      const result = await analyzeDiagramImage(file);
+      loadDiagram(result);
+      alert("✅ Diagrama generado desde imagen con éxito");
+      setFile(null);
+    } catch (err) {
+      console.error(err);
+      alert("❌ Error al procesar la imagen");
+    } finally {
+      setLoadingImage(false);
+    }
+  };
 
   const examples = [
     {
@@ -20,8 +42,8 @@ const AIPanel = ({
       items: [
         "Sistema de gestión de colegio con Estudiante y Profesor",
         "Tienda online con Producto, Cliente y Pedido",
-        "Biblioteca con Libro, Usuario y Préstamo"
-      ]
+        "Biblioteca con Libro, Usuario y Préstamo",
+      ],
     },
     {
       category: "Relaciones UML Específicas",
@@ -30,8 +52,8 @@ const AIPanel = ({
         "Clase Universidad que tiene agregación con Departamento",
         "Clase Pedido con composición fuerte de LineaPedido",
         "Interfaz Pagable que es implementada por Factura (realización)",
-        "Clase Cliente que depende de ServicioValidacion"
-      ]
+        "Clase Cliente que depende de ServicioValidacion",
+      ],
     },
     {
       category: "Clases Especiales",
@@ -39,8 +61,8 @@ const AIPanel = ({
         "Clase abstracta Empleado con método calcularSalario abstracto",
         "Interfaz Repositorio con estereotipo «repository»",
         "Clase Servicio con estereotipo «service» y método buscar",
-        "Clase intermedia para relación muchos a muchos entre Estudiante y Curso"
-      ]
+        "Clase intermedia para relación muchos a muchos entre Estudiante y Curso",
+      ],
     },
     {
       category: "Generación Incremental",
@@ -48,9 +70,9 @@ const AIPanel = ({
         "Agrega clase Administrador que herede de Usuario",
         "Añade clase Dirección con composición a Cliente",
         "Crea interfaz Notificable implementada por Email y SMS",
-        "Agrega relación de asociación entre Profesor y Curso"
-      ]
-    }
+        "Agrega relación de asociación entre Profesor y Curso",
+      ],
+    },
   ];
 
   return (
@@ -74,14 +96,16 @@ const AIPanel = ({
           className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm mb-3"
         >
           <Info size={16} />
-          {showExamples ? 'Ocultar ejemplos' : 'Ver ejemplos y guía UML 2.5'}
+          {showExamples ? "Ocultar ejemplos" : "Ver ejemplos y guía UML 2.5"}
         </button>
 
         {/* Panel de ejemplos expandible */}
         {showExamples && (
           <div className="mb-4 p-4 bg-gray-50 rounded border max-h-64 overflow-y-auto">
-            <h4 className="font-bold text-sm mb-3 text-gray-700">Ejemplos de Prompts UML 2.5</h4>
-            
+            <h4 className="font-bold text-sm mb-3 text-gray-700">
+              Ejemplos de Prompts UML 2.5
+            </h4>
+
             {examples.map((section, idx) => (
               <div key={idx} className="mb-4">
                 <h5 className="font-semibold text-xs text-purple-600 mb-2">
@@ -105,12 +129,24 @@ const AIPanel = ({
             <div className="mt-4 p-3 bg-blue-50 rounded text-xs">
               <strong className="text-blue-800">💡 Tipos de Relaciones UML:</strong>
               <ul className="mt-2 space-y-1 text-gray-700">
-                <li><strong>Asociación:</strong> Relación simple entre clases</li>
-                <li><strong>Agregación:</strong> Todo-parte débil (◇→)</li>
-                <li><strong>Composición:</strong> Todo-parte fuerte (◆→)</li>
-                <li><strong>Herencia:</strong> "X hereda de Y" (△─)</li>
-                <li><strong>Realización:</strong> "X implementa interfaz Y" (△··)</li>
-                <li><strong>Dependencia:</strong> "X usa temporalmente Y" (··→)</li>
+                <li>
+                  <strong>Asociación:</strong> Relación simple entre clases
+                </li>
+                <li>
+                  <strong>Agregación:</strong> Todo-parte débil (◇→)
+                </li>
+                <li>
+                  <strong>Composición:</strong> Todo-parte fuerte (◆→)
+                </li>
+                <li>
+                  <strong>Herencia:</strong> "X hereda de Y" (△─)
+                </li>
+                <li>
+                  <strong>Realización:</strong> "X implementa interfaz Y" (△··)
+                </li>
+                <li>
+                  <strong>Dependencia:</strong> "X usa temporalmente Y" (··→)
+                </li>
               </ul>
             </div>
 
@@ -127,8 +163,38 @@ const AIPanel = ({
           </div>
         )}
 
-        {/* Botones de acción */}
-        <div className="flex gap-2">
+        {/* --- 🔽 Nueva sección: subir imagen UML --- */}
+        <div className="border-t mt-4 pt-3">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">
+            O sube una imagen UML 📸
+          </h4>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFile(e.target.files[0])}
+            className="mb-2 text-sm"
+          />
+          <button
+            onClick={handleAnalyzeImage}
+            disabled={!file || isGenerating || isLoadingImage}
+            className="flex items-center gap-2 bg-green-500 text-white p-2 rounded hover:bg-green-600 text-sm"
+          >
+            {isLoadingImage ? (
+              <>
+                <RefreshCw size={14} className="animate-spin" />
+                Analizando imagen...
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} />
+                Generar desde Imagen
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* --- Botones de acción (texto) --- */}
+        <div className="flex gap-2 mt-4">
           <button
             onClick={() => onGenerate(query)}
             disabled={!query.trim() || isGenerating}
@@ -149,19 +215,19 @@ const AIPanel = ({
           <button
             onClick={() => {
               onClose();
-              setQuery('');
+              setQuery("");
             }}
             className="px-4 py-2 border rounded hover:bg-gray-50"
-            disabled={isGenerating}
+            disabled={isGenerating || isLoadingImage}
           >
             Cancelar
           </button>
         </div>
 
-        {/* Tips adicionales */}
         <div className="mt-3 text-xs text-gray-500">
-          <strong>💡 Tip:</strong> Sé específico sobre el tipo de relación que necesitas. 
-          Si ya tienes clases, puedes agregar nuevas sin perder las existentes.
+          <strong>💡 Tip:</strong> Sé específico sobre el tipo de relación que
+          necesitas. Si ya tienes clases, puedes agregar nuevas sin perder las
+          existentes.
         </div>
       </div>
     </div>
