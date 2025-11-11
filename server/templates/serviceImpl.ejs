@@ -1,0 +1,71 @@
+package com.example.<%= projectName %>.service;
+
+import org.springframework.stereotype.Service;
+import com.example.<%= projectName %>.repository.<%= EntityName %>Repository;
+import com.example.<%= projectName %>.domain.<%= EntityName %>;
+import com.example.<%= projectName %>.dto.<%= EntityName %>Dto;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class <%= EntityName %>ServiceImpl implements <%= EntityName %>Service {
+
+  private final <%= EntityName %>Repository repository;
+
+  public <%= EntityName %>ServiceImpl(<%= EntityName %>Repository repository) {
+    this.repository = repository;
+  }
+
+  // Mapeo Entity -> DTO
+  private <%= EntityName %>Dto toDto(<%= EntityName %> e) {
+    if (e == null) return null;
+    <%= EntityName %>Dto d = new <%= EntityName %>Dto();
+    d.setId(e.getId());
+    <% columns.forEach(function(col){ %>
+    d.set<%= col.FieldNameCapital %>(e.get<%= col.FieldNameCapital %>());
+    <% }); %>
+    return d;
+  }
+
+  // Mapeo DTO -> Entity
+  private <%= EntityName %> toEntity(<%= EntityName %>Dto d) {
+    if (d == null) return null;
+    <%= EntityName %> e = new <%= EntityName %>();
+    if (d.getId() != null) e.setId(d.getId());
+    <% columns.forEach(function(col){ %>
+    e.set<%= col.FieldNameCapital %>(d.get<%= col.FieldNameCapital %>());
+    <% }); %>
+    return e;
+  }
+
+  @Override
+  public <%= EntityName %>Dto create(<%= EntityName %>Dto dto) {
+    <%= EntityName %> ent = toEntity(dto);
+    ent = repository.save(ent);
+    return toDto(ent);
+  }
+
+  @Override
+  public <%= EntityName %>Dto update(Long id, <%= EntityName %>Dto dto) {
+    if (!repository.existsById(id)) return null;
+    <%= EntityName %> ent = toEntity(dto);
+    ent.setId(id);
+    ent = repository.save(ent);
+    return toDto(ent);
+  }
+
+  @Override
+  public void delete(Long id) {
+    repository.deleteById(id);
+  }
+
+  @Override
+  public <%= EntityName %>Dto getById(Long id) {
+    return repository.findById(id).map(this::toDto).orElse(null);
+  }
+
+  @Override
+  public List<<%= EntityName %>Dto> getAll() {
+    return repository.findAll().stream().map(this::toDto).collect(Collectors.toList());
+  }
+}

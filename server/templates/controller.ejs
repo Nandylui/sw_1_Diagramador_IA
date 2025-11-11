@@ -1,0 +1,43 @@
+package com.example.<%= projectName %>.controller;
+
+import com.example.<%= projectName %>.dto.<%= EntityName %>Dto;
+import com.example.<%= projectName %>.service.<%= EntityName %>Service;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/<%= entityPath %>")
+public class <%= EntityName %>Controller {
+
+  private final <%= EntityName %>Service service;
+
+  public <%= EntityName %>Controller(<%= EntityName %>Service service) {
+    this.service = service;
+  }
+
+  @PostMapping
+  public <%= EntityName %>Dto create(@RequestBody <%= EntityName %>Dto dto) {
+    return service.create(dto);
+  }
+
+  @GetMapping("/{id}")
+  public <%= EntityName %>Dto getById(@PathVariable Long id) {
+    return service.getById(id);
+  }
+
+  @GetMapping
+  public List<<%= EntityName %>Dto> getAll() {
+    return service.getAll();
+  }
+
+  @PutMapping("/{id}")
+  public <%= EntityName %>Dto update(@PathVariable Long id, @RequestBody <%= EntityName %>Dto dto) {
+    return service.update(id, dto);
+  }
+
+  @DeleteMapping("/{id}")
+  public void delete(@PathVariable Long id) {
+    service.delete(id);
+  }
+}

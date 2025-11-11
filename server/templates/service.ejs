@@ -1,0 +1,12 @@
+package com.example.<%= projectName %>.service;
+
+import com.example.<%= projectName %>.dto.<%= EntityName %>Dto;
+import java.util.List;
+
+public interface <%= EntityName %>Service {
+  <%= EntityName %>Dto create(<%= EntityName %>Dto dto);
+  <%= EntityName %>Dto update(Long id, <%= EntityName %>Dto dto);
+  void delete(Long id);
+  <%= EntityName %>Dto getById(Long id);
+  List<<%= EntityName %>Dto> getAll();
+}

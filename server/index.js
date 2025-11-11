@@ -7,20 +7,31 @@ import dotenv from "dotenv";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import fsp from "fs/promises";
+import fse from "fs-extra";
+import os from "os";
+import ejs from "ejs";
+import archiver from "archiver";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" })); // aumentar tamaño si es necesario
 
 // ✅ Crear carpeta "uploads" si no existe
 const uploadDir = path.resolve("uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
+// Servir archivos estáticos subidos
+app.use("/uploads", express.static(uploadDir));
 
 // ✅ Configurar Multer para subir imágenes
 const storage = multer.diskStorage({
@@ -44,7 +55,9 @@ const upload = multer({
   },
 });
 
-// ✅ Ruta para subir imágenes (ej. fotos PNG/JPG)
+// ------------------ RUTAS EXISTENTES ------------------
+
+// Ruta para subir imágenes (ej. fotos PNG/JPG)
 app.post("/api/upload-image", upload.single("image"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No se subió ninguna imagen" });
@@ -58,14 +71,14 @@ app.post("/api/upload-image", upload.single("image"), (req, res) => {
   });
 });
 
-// ✅ Nueva ruta: analizar imagen de diagrama UML con IA
+// Nueva ruta: analizar imagen de diagrama UML con IA
 app.post("/api/diagram-image", upload.single("image"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No se subió ninguna imagen" });
     }
 
-    // URL local de la imagen subida
+    // URL local de la imagen subida (servida por express)
     const imageUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
 
     console.log("📸 Analizando imagen:", imageUrl);
@@ -78,7 +91,7 @@ app.post("/api/diagram-image", upload.single("image"), async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini", // O el modelo que uses
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -126,7 +139,7 @@ app.post("/api/diagram-image", upload.single("image"), async (req, res) => {
   }
 });
 
-// ✅ Tu ruta original del UML (sin tocar)
+// Tu ruta original del UML (sin tocar)
 app.post("/api/diagram", async (req, res) => {
   const { query } = req.body;
 
@@ -156,10 +169,6 @@ ESTRUCTURA REQUERIDA (UML 2.5):
 
 TIPOS DE RELACIONES UML 2.5 VÁLIDOS:
 association, aggregation, composition, generalization, realization, dependency, oneToOne, oneToMany, manyToMany
-
-VISIBILIDAD UML 2.5:
-+ = public, - = private, # = protected, ~ = package
-... (texto original omitido para brevedad)
 `,
           },
           { role: "user", content: query },
@@ -237,7 +246,173 @@ VISIBILIDAD UML 2.5:
   }
 });
 
-// ✅ Health check
+// ------------------ NUEVA RUTA: export (genera zip de Spring Boot) ------------------
+
+/**
+ * Helper: mapea tipos SQL -> tipos Java (simple)
+ */
+const sqlToJava = (sqlType) => {
+  const t = (sqlType || "").toUpperCase();
+  if (t.startsWith("VARCHAR") || t.includes("CHAR") || t === "TEXT") return "String";
+  if (t === "INT" || t === "INTEGER" || t === "SMALLINT") return "Integer";
+  if (t === "BIGINT") return "Long";
+  if (t === "BOOLEAN" || t === "BIT") return "Boolean";
+  if (t === "DATE") return "LocalDate";
+  if (t === "TIMESTAMP" || t === "DATETIME") return "LocalDateTime";
+  if (t === "DECIMAL" || t.startsWith("NUMERIC")) return "BigDecimal";
+  return "String";
+};
+const toFieldName = (name) => name.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
+const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// render template from server/templates
+// async function renderTemplate(templateName, data) {
+//   const tplPath = path.join(process.cwd(), "server", "templates", templateName);
+//   const tpl = await fsp.readFile(tplPath, "utf8");
+//   return ejs.render(tpl, data);
+// }
+
+async function renderTemplate(templateName, data) {
+  // Primero intenta: templates junto al archivo index.js (server/templates)
+  const tryPaths = [
+    path.join(__dirname, "templates", templateName),      // ideal: server/templates
+    path.join(process.cwd(), "templates", templateName),  // si ejecutas desde repo root: ./templates
+    path.join(process.cwd(), "server", "templates", templateName) // fallback antiguo
+  ];
+
+  for (const p of tryPaths) {
+    try {
+      const tpl = await fsp.readFile(p, "utf8");
+      return ejs.render(tpl, data);
+    } catch (err) {
+      // no existe en esa ruta → probar siguiente
+    }
+  }
+
+  // Si llegamos aquí, ninguna ruta funcionó -> lanzar error claro
+  throw new Error(`Template not found: tried paths:\n${tryPaths.join("\n")}`);
+}
+
+
+app.post("/api/export", async (req, res) => {
+  try {
+    const diagram = req.body; // espera { name, tables: [...] } o { name, classes, connections } si adaptas
+    // Soporte para recibir classes/connections (desde frontend)
+    let tables = diagram.tables;
+    if ((!tables || !Array.isArray(tables)) && Array.isArray(diagram.classes)) {
+      // convertir classes -> tables (campo fields -> columns)
+      tables = diagram.classes.map((cls) => ({
+        name: cls.name,
+        columns: (cls.fields || []).map((f) => ({
+          name: f.name,
+          type: f.type || "VARCHAR(255)",
+          pk: (f.name || "").toLowerCase() === "id",
+          nullable: f.nullable !== undefined ? f.nullable : !((f.name || "").toLowerCase() === "id")
+        }))
+      }));
+    }
+
+    const projectName = (diagram.name || "demo").replace(/\s+/g, "").toLowerCase();
+
+    // carpeta temporal
+    const tmpRoot = await fsp.mkdtemp(path.join(os.tmpdir(), `sb-${projectName}-`));
+    const baseJavaPath = path.join(tmpRoot, "src", "main", "java", "com", "example", projectName);
+    const resourcesPath = path.join(tmpRoot, "src", "main", "resources");
+
+    await fse.ensureDir(baseJavaPath);
+    await fse.ensureDir(resourcesPath);
+
+    // pom.xml
+    const pom = await renderTemplate("pom.xml.ejs", { projectName });
+    await fsp.writeFile(path.join(tmpRoot, "pom.xml"), pom, "utf8");
+
+    // DemoApplication
+    const demoApp = await renderTemplate("DemoApplication.java.ejs", { projectName });
+    await fsp.writeFile(path.join(baseJavaPath, "DemoApplication.java"), demoApp, "utf8");
+
+    // por cada tabla generar archivos
+    for (const table of tables || []) {
+      const tableName = table.name;
+      const EntityName = capitalize(toFieldName(tableName));
+      const entityDir = path.join(baseJavaPath, "domain");
+      const dtoDir = path.join(baseJavaPath, "dto");
+      const repoDir = path.join(baseJavaPath, "repository");
+      const controllerDir = path.join(baseJavaPath, "controller");
+      const serviceDir = path.join(baseJavaPath, "service");
+
+      await fse.ensureDir(entityDir);
+      await fse.ensureDir(dtoDir);
+      await fse.ensureDir(repoDir);
+      await fse.ensureDir(controllerDir);
+      await fse.ensureDir(serviceDir);
+
+      const cols = (table.columns || []).map(c => {
+        const javaType = sqlToJava(c.type);
+        return {
+          name: c.name,
+          fieldName: toFieldName(c.name),
+          FieldNameCapital: capitalize(toFieldName(c.name)),
+          javaType,
+          nullable: c.nullable !== false,
+          pk: !!c.pk
+        };
+      });
+
+      const entityCode = await renderTemplate("entity.ejs", {
+        projectName, tableName, EntityName, columns: cols,
+        hasLocalDate: cols.some(c => c.javaType === "LocalDate"),
+        hasLocalDateTime: cols.some(c => c.javaType === "LocalDateTime")
+      });
+      await fsp.writeFile(path.join(entityDir, `${EntityName}.java`), entityCode, "utf8");
+
+      const dtoCode = await renderTemplate("dto.ejs", { projectName, EntityName, columns: cols });
+      await fsp.writeFile(path.join(dtoDir, `${EntityName}Dto.java`), dtoCode, "utf8");
+
+      const repoCode = await renderTemplate("repository.ejs", { projectName, EntityName });
+      await fsp.writeFile(path.join(repoDir, `${EntityName}Repository.java`), repoCode, "utf8");
+
+      const serviceCode = await renderTemplate("service.ejs", { projectName, EntityName });
+      await fsp.writeFile(path.join(serviceDir, `${EntityName}Service.java`), serviceCode, "utf8");
+
+      try {
+        const serviceImplCode = await renderTemplate("serviceImpl.ejs", { projectName, EntityName, columns: cols });
+        await fsp.writeFile(path.join(serviceDir, `${EntityName}ServiceImpl.java`), serviceImplCode, "utf8");
+      } catch (err) {
+      console.warn("No se generó ServiceImpl para", EntityName, ":", err.message);
+}
+
+      const controllerCode = await renderTemplate("controller.ejs", {
+        projectName, EntityName, entityPath: toFieldName(tableName)
+      });
+      await fsp.writeFile(path.join(controllerDir, `${EntityName}Controller.java`), controllerCode, "utf8");
+    }
+
+    // application.properties
+    const appProps = `spring.datasource.url=jdbc:h2:mem:testdb\nspring.datasource.driverClassName=org.h2.Driver\nspring.jpa.hibernate.ddl-auto=update\n`;
+    await fsp.writeFile(path.join(resourcesPath, "application.properties"), appProps, "utf8");
+
+    // enviar zip al cliente
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename=${projectName}.zip`);
+
+    const archive = archiver("zip", { zlib: { level: 9 }});
+    archive.on("error", err => { throw err; });
+    archive.pipe(res);
+    archive.directory(tmpRoot, false);
+    await archive.finalize();
+
+    // limpieza best-effort
+    setTimeout(() => fse.remove(tmpRoot).catch(()=>{}), 30_000);
+
+  } catch (err) {
+    console.error("Export error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ------------------ FIN: export ------------------
+
+// Health check
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",

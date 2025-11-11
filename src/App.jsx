@@ -4,9 +4,11 @@ import Toolbar from "./components/Toolbar";
 import Canvas from "./components/Canvas";
 import PropertyPanel from "./components/PropertyPanel/PropertyPanel";
 import AIPanel from "./components/AIPanel";
+import exportService from "./services/exportService";
 import { useAI } from "./hooks/useAI";
 import { RELATIONSHIP_TYPES } from "./utils/constants";
 import { exportSpringBoot } from "./utils/exportSpringBoot";
+
 
 // ✅ Importamos el provider del contexto
 import { DiagramProvider } from "./context/DiagramContext";
@@ -137,13 +139,37 @@ IMPORTANTE:
     }
   };
 
-  const onExportCode = () => {
-    if (!classes || classes.length === 0) {
-      alert('No hay clases para exportar');
-      return;
+  // const onExportCode = () => {
+  //   if (!classes || classes.length === 0) {
+  //     alert('No hay clases para exportar');
+  //     return;
+  //   }
+  //   exportSpringBoot(classes);
+  // };
+const onExportCode = async () => {
+  if (!classes || classes.length === 0) {
+    alert("⚠️ No hay clases para exportar");
+    return;
+  }
+
+  try {
+    const result = await exportService.exportToZip({
+      name: "ProyectoSpringBoot",
+      classes,
+      connections,
+    });
+
+    if (!result.ok) {
+      alert("❌ Error exportando: " + result.error);
+    } else {
+      alert("✅ Proyecto Spring Boot descargado correctamente como ZIP");
     }
-    exportSpringBoot(classes);
-  };
+  } catch (err) {
+    console.error("Error al exportar:", err);
+    alert("⚠️ Falló la exportación: " + err.message);
+  }
+};
+
 
   const onClassMove = (id, pos) => {
     setClasses(prev => prev.map(cls => 
